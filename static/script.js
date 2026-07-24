@@ -19,6 +19,33 @@ const configEditor = document.getElementById('config-editor');
 let socket;
 let reconnectInterval;
 
+// --- API Key Handling ---
+// Key lives in sessionStorage (per-tab); sent as X-API-Key header / ?api_key= param.
+
+function getApiKey() {
+    return sessionStorage.getItem('iptv_api_key') || '';
+}
+
+function ensureApiKey() {
+    let key = getApiKey();
+    if (!key) {
+        key = window.prompt("This server requires an API key. Enter it to continue:");
+        if (key) {
+            sessionStorage.setItem('iptv_api_key', key);
+        }
+    }
+    return key;
+}
+
+function authHeaders(extra = {}) {
+    const headers = { ...extra };
+    const key = getApiKey();
+    if (key) {
+        headers['X-API-Key'] = key;
+    }
+    return headers;
+}
+
 // --- WebSocket & Logging Logic ---
 
 function setConnectionStatus(connected) {
@@ -35,8 +62,12 @@ function setConnectionStatus(connected) {
 
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
-    
+    let wsUrl = `${protocol}//${window.location.host}/ws/logs`;
+    const key = getApiKey();
+    if (key) {
+        wsUrl += `?api_key=${encodeURIComponent(key)}`;
+    }
+
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -70,8 +101,19 @@ function connectWebSocket() {
         log(msg, className);
     };
 
-    socket.onclose = () => {
+    socket.onclose = (event) => {
         setConnectionStatus(false);
+        if (event.code === 4401) {
+            // Server requires an API key we didn't provide (or it was wrong).
+            sessionStorage.removeItem('iptv_api_key');
+            if (ensureApiKey()) {
+                log("System: API key updated. Reconnecting...", "log-system");
+                connectWebSocket();
+            } else {
+                log("System: API key required. Reload the page to try again.", "log-error");
+            }
+            return;
+        }
         log("System: Disconnected. Reconnecting in 3s...", "log-error");
         if (!reconnectInterval) {
             reconnectInterval = setInterval(connectWebSocket, 3000);
@@ -111,18 +153,25 @@ async function triggerAction(endpoint, body = {}) {
     try {
         const response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify(body)
         });
-        
-        if (!response.ok) {
+
+        if (response.status === 403) {
+            log("API key missing or invalid.", "log-error");
+            sessionStorage.removeItem('iptv_api_key');
+            if (ensureApiKey()) {
+                setLoading(false);
+                return triggerAction(endpoint, body);
+            }
+        } else if (response.status === 409) {
+            log("A task is already running. Wait for it to finish.", "log-warning");
+        } else if (!response.ok) {
             log(`Error starting task: ${response.statusText}`, "log-error");
-            setLoading(false);
         }
     } catch (error) {
         log(`Network error: ${error.message}`, "log-error");
+    } finally {
         setLoading(false);
     }
 }
@@ -131,7 +180,7 @@ async function triggerAction(endpoint, body = {}) {
 
 async function loadConfigFiles() {
     try {
-        const res = await fetch('/api/configs');
+        const res = await fetch('/api/configs', { headers: authHeaders() });
         if (!res.ok) throw new Error('Failed to list configs');
         const data = await res.json();
         
@@ -155,7 +204,12 @@ async function loadConfigContent(filename) {
     configEditor.value = "Loading...";
     configEditor.disabled = true;
     try {
-        const res = await fetch(`/api/config/${filename}`);
+        const res = await fetch(`/api/config/${filename}`, { headers: authHeaders() });
+        if (res.status === 403) {
+            sessionStorage.removeItem('iptv_api_key');
+            if (ensureApiKey()) return loadConfigContent(filename);
+            throw new Error('API key required');
+        }
         if (!res.ok) throw new Error('Failed to load config content');
         const json = await res.json();
         configEditor.value = JSON.stringify(json, null, 2);
@@ -180,10 +234,15 @@ async function saveConfig() {
         
         const res = await fetch(`/api/config/${filename}`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ content: content })
         });
-        
+
+        if (res.status === 403) {
+            sessionStorage.removeItem('iptv_api_key');
+            if (ensureApiKey()) return saveConfig();
+            throw new Error('API key required');
+        }
         if (!res.ok) throw new Error(await res.text());
         
         log(`Configuration saved successfully: ${filename}`, "log-success");

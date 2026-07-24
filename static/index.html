@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3U File Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <i class="fa-solid fa-tv"></i>
+                <span>M3U File Generator</span>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot" id="connection-status"></span>
+                <span id="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="card control-card">
+                <h2><i class="fa-solid fa-sliders"></i> Configuration</h2>
+                
+                <div class="input-group">
+                    <label for="search-url">Source URL</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-globe input-icon"></i>
+                        <input type="text" id="search-url" placeholder="https://example.com/iptv" value="https://www.iptvregion.eu.org/search/label/M3U">
+                    </div>
+                    <small class="hint">Target website to scrape M3U links from.</small>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="btn-scrape" class="btn btn-primary">
+                        <i class="fa-solid fa-search"></i> Find Links
+                    </button>
+                    <button id="btn-process" class="btn btn-secondary">
+                        <i class="fa-solid fa-filter"></i> Process & Filter
+                    </button>
+                    <button id="btn-edit-config" class="btn btn-secondary">
+                        <i class="fa-solid fa-edit"></i> Edit Filters
+                    </button>
+                    <button id="btn-download" class="btn btn-success" disabled>
+                        <i class="fa-solid fa-download"></i> Download M3U
+                    </button>
+                </div>
+            </div>
+
+            <div class="card terminal-card">
+                <div class="terminal-header">
+                    <div class="terminal-title">
+                        <i class="fa-solid fa-terminal"></i> Live Logs
+                    </div>
+                    <div class="terminal-actions">
+                        <button id="btn-clear-logs" class="btn-icon" title="Clear Logs">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="terminal-body" id="logs">
+                    <div class="log-line log-system">Initializing system... Ready.</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Config Editor Modal -->
+    <div id="config-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Configuration</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <select id="config-file-select" class="config-select"></select>
+                <textarea id="config-editor" spellcheck="false"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-config" class="btn btn-secondary">Cancel</button>
+                <button id="btn-save-config" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+    <footer>
+        cemmetje87 - M3U File Generator v1.0 - MIT License
+    </footer>
+</body>
+</html>

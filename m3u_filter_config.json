@@ -1,0 +1,105 @@
+{
+  "settings": {
+    "top_fastest_count": 100,
+    "domain_error_threshold": 5
+  },
+  "exclude": {
+    "group": {
+      "exact_match": [
+        "XXX",
+        "ADULT"
+      ],
+      "contains": [
+        "XXX",
+        "ADULT",
+        "PORN",
+        "18+"
+      ],
+      "startswith": [
+        "XXX",
+        "ADULT"
+      ],
+      "regex": []
+    },
+    "channel": {
+      "exact_match": [],
+      "contains": [
+        "XXX",
+        "ADULT"
+      ],
+      "startswith": [],
+      "regex": []
+    },
+    "tvg_name": {
+      "exact_match": [],
+      "contains": [
+        "XXX",
+        "ADULT"
+      ],
+      "startswith": [],
+      "regex": []
+    },
+    "url_domain": {
+      "contains": [
+        "arslan.vip",
+        "titan8k.us",
+        "blackgood.xyz",
+        "fortv.cc",
+        "reis64.com",
+        "iptv.darktv.eu",
+        "iptv.darktv.eu",
+        "tvmate.icu",
+        "rts23.xyz",
+        "nocable.cc",
+        "cord-cutter.net",
+        "sonymax.org",
+        "mag.alphatx.me",
+        "iptvtree.net",
+        ".top",
+        "popalc.xyz",
+        "ip.sltv.be"
+      ]
+    }
+  },
+  "include": {
+    "group_prefix": [],
+    "group_content": [],
+    "group": {
+      "exact_match": [],
+      "contains": [
+        "Netherlands",
+        "Thai",
+        "Turkish",
+        "TURK",
+        "Thailand",
+        "THAILAND",
+        "HOLLYWOOD",
+        "NEW RELEASE",
+        "Series ➾ English",
+        "VOD ➾ English",
+        "ENGLISH ➾ MOVIES (VIP)"
+      ],
+      "startswith": [
+        "NL",
+        "TR"
+      ],
+      "regex": [
+        "^(TR \\||TR :|TH \\||TH :|NL \\||NL :|EN \\||EN :).*(NETFLIX|HULU|KINDEREN|AMAZON|PRIME|DISNEY|MOVIES|CINEMA|SERIE|FILM|VIP|ENTERTAINMENT|EXXEN)"
+      ]
+    },
+    "channel": {
+      "exact_match": [],
+      "contains": [],
+      "startswith": [],
+      "regex": []
+    },
+    "tvg_name": {
+      "exact_match": [],
+      "contains": [],
+      "startswith": [],
+      "regex": [
+        "^(TR \\||TR :|TH \\||TH :|NL \\||NL :)"
+      ]
+    }
+  }
+}

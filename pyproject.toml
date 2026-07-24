@@ -1,0 +1,13 @@
+[project]
+name = "iptv"
+version = "0.1.0"
+description = "This app is designed to download m3u files from a given uri (scraping, then generate one that contains working links to both channels and VOD links absed on defined criteria)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "fastapi>=0.124.0",
+    "requests>=2.32.5",
+    "uvicorn>=0.38.0",
+    "websockets>=15.0.1",
+]

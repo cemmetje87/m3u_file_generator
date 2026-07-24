@@ -1,0 +1,33 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.python-version
+
+# Generated IPTV files
+master_iptv.m3u
+iptv_m3u_urls.txt
+iptv_m3u_urls.json
+archive/
+cache/
+
+# Credentials & runtime artifacts — NEVER commit
+urls.txt
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+
+# Tooling / local state
+.omo/
+.codegraph
+.codegraph/
+.playwright-mcp/
+.playwright-mcp

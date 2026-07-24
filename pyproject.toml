@@ -1,7 +1,7 @@
 [project]
-name = "iptv"
+name = "m3u-file-generator"
 version = "0.1.0"
-description = "This app is designed to download m3u files from a given uri (scraping, then generate one that contains working links to both channels and VOD links absed on defined criteria)"
+description = "Downloads M3U playlists from a given URI (scraping), then generates one that contains working links to both channels and VOD links based on defined criteria"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,3 +11,11 @@ dependencies = [
     "uvicorn>=0.38.0",
     "websockets>=15.0.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

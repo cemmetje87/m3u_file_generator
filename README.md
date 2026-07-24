@@ -1,185 +1,189 @@
 # IPTV Scraper and Processor
 
-This project provides a robust system for scraping IPTV M3U playlists from various online sources, applying extensive filtering based on user-defined criteria, validating stream URLs for aliveness and latency, and generating a consolidated, optimized `master_iptv.m3u` playlist. It also features a web-based interface for easy management and real-time monitoring of the scraping and processing tasks.
+Scrapes M3U playlist URLs from configured web sources, downloads them,
+applies user-defined include/exclude filters, validates the streams for
+aliveness and latency, and writes a deduplicated `master_iptv.m3u`. A small
+FastAPI web UI lets you trigger jobs and watch logs in real time.
 
 <img width="1199" height="795" alt="image" src="https://github.com/user-attachments/assets/0475b3dc-ec23-4316-ba60-64165f26837f" />
 
 ## Features
 
--   **Web Interface:** A user-friendly web interface (`static/index.html`) for initiating scraping/processing and viewing real-time logs via WebSockets.
--   **M3U URL Scraping:** Automatically discovers and extracts M3U playlist URLs from specified web pages.
--   **URL Validation & Latency Testing:** Checks the aliveness of scraped URLs and measures their response times to prioritize faster streams.
--   **Advanced M3U Filtering:**
-    -   **Configurable Rules:** Utilizes `m3u_filter_config.json` for highly customizable filtering criteria.
-    -   **Exclude/Include Logic:** Filter by `group-title`, channel name, `tvg-name`, and URL domain using exact matches, "contains" keywords, "starts with" prefixes, and regular expressions.
-    -   **Domain Error Tracking:** Integrates with `domain_errors.db` to keep a history of problematic domains, preventing repeated attempts to use unreliable sources.
--   **M3U Playlist Generation:** Creates a `master_iptv.m3u` file containing only the desired, validated, and fastest IPTV streams.
--   **Duplicate Removal:** Ensures uniqueness of channels in the final `master_iptv.m3u`.
--   **Archiving & Rotation:** Automatically archives generated `master_iptv.m3u` files with a configurable backup rotation.
--   **Cache Management:** Cleans up temporary downloaded M3U files to maintain system hygiene.
--   **Real-time Logging:** Provides live updates on processing status and errors via WebSockets to the connected web interface.
+- **Web interface** (`static/index.html`) for triggering jobs and watching
+  WebSocket-pushed logs.
+- **M3U URL scraping** discovers and extracts M3U playlist URLs from
+  configured pages.
+- **URL validation & latency testing** uses a `ThreadPoolExecutor` to probe
+  every URL concurrently; the N fastest go on to processing.
+- **M3U filtering** is configured in `m3u_filter_config.json` and supports
+  exact-match, contains, startswith, and regex rules on `group-title`,
+  channel name, `tvg-name`, plus URL-domain exclusions with proper
+  endswith semantics (no false positives like "laptop.com" matching
+  "laptop.arslan.vip" incorrectly).
+- **Domain error tracking** persists per-domain failure counts in
+  `domain_errors.db` so unresponsive sources are skipped on subsequent
+  runs.
+- **Deduplication** keeps the first occurrence of each channel name
+  (case-insensitive) in the master playlist.
+- **SSRF guard** (`netguard.is_public_http_url`) blocks non-HTTP schemes
+  and any host resolving to a private, loopback, link-local, multicast,
+  reserved, or unspecified address before the server fetches anything.
+- **API key auth** for the `/api/*` endpoints and the WebSocket, with the
+  key stored per-tab in `sessionStorage` in the frontend.
 
-## TODO
-**Containerize:** Once proven stable and functioning, I'll work to make it work within a Docker container.
+## Requirements
+
+- Python 3.12+
+- [`uv`](https://docs.astral.sh/uv/) (recommended) or `pip`
 
 ## Installation
 
-### Prerequisites
+```bash
+git clone https://github.com/cemmetje87/m3u_file_generator.git
+cd m3u_file_generator
+uv sync
+```
 
--   Python 3.8+
--   `uv` (recommended for dependency management) or `pip`
+If you prefer plain `pip`:
 
-### Steps
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/yourusername/iptv-scraper-processor.git
-    cd iptv-scraper-processor
-    ```
-
-2.  **Install dependencies:**
-    Using `uv` (recommended):
-    ```bash
-    uv pip install -r requirements.txt
-    ```
-    Using `pip`:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  **Prepare configuration:**
-    Ensure `m3u_filter_config.json` is set up according to your preferences. A default configuration is usually provided.
-
-## Usage
-
-The application can be used via its web interface or by running the individual Python scripts.
-
-### Running the Web Interface (Recommended)
-
-1.  **Start the FastAPI server:**
-    ```bash
-    python main.py
-    ```
-    The server will typically run on `http://0.0.0.0:8000`.
-
-2.  **Access the Web Interface:**
-    Open your web browser and navigate to `http://localhost:8000`.
-
-    From the web interface, you can:
-    -   Trigger the IPTV scraper.
-    -   Trigger the M3U processor.
-    -   View real-time logs of the tasks.
-    -   Download the generated `master_iptv.m3u`.
-    -   View and edit `m3u_filter_config.json`.
-
-### Running Scripts Manually (CLI)
-
-You can also run the core scripts directly from the command line if you prefer.
-
-1.  **Scrape M3U URLs:**
-    ```bash
-    python iptv_scraper.py --url "https://www.example.com/your-iptv-source"
-    ```
-    This will output `iptv_m3u_urls.txt` and `iptv_m3u_urls.json` with the discovered and validated URLs.
-
-2.  **Process M3U URLs:**
-    ```bash
-    python m3u_processor.py --input iptv_m3u_urls.txt --config m3u_filter_config.json
-    ```
-    This will generate `master_iptv.m3u` based on the input URLs and your filtering configuration.
+```bash
+pip install "fastapi>=0.124" "uvicorn>=0.38" "requests>=2.32" "websockets>=15" "beautifulsoup4>=4.14" pytest
+```
 
 ## Configuration
 
-The primary configuration file is `m3u_filter_config.json`. This JSON file allows you to define detailed rules for how M3U entries are filtered.
+### Environment variables (all optional)
 
-### `m3u_filter_config.json` Structure
+| Variable          | Default       | Notes                                                                  |
+| ----------------- | ------------- | ---------------------------------------------------------------------- |
+| `IPTV_API_KEY`    | (unset)       | If set, all `/api/*` endpoints and the WebSocket require this key.     |
+| `IPTV_HOST`       | `127.0.0.1`   | Bind address. **Must be a loopback address** unless `IPTV_API_KEY` is set; the server refuses to start otherwise. |
+| `IPTV_PORT`       | `8000`        | TCP port.                                                              |
+
+### `m3u_filter_config.json`
+
+Drives all filtering. See the file for the full schema; the highlights:
 
 ```json
 {
   "settings": {
-    "top_fastest_count": 100,         // Number of fastest URLs to keep after speed testing (0 for all)
-    "domain_error_threshold": 5       // Number of errors before a domain is temporarily skipped (0 to disable)
+    "top_fastest_count": 100,
+    "domain_error_threshold": 5
   },
   "exclude": {
-    "group": {                        // Exclusion rules for group-title
-      "exact_match": ["XXX", "ADULT"],
-      "contains": ["XXX", "ADULT", "PORN"],
-      "startswith": [],
-      "regex": []
-    },
-    "channel": {                      // Exclusion rules for channel name
-      "exact_match": [],
-      "contains": [],
-      "startswith": [],
-      "regex": []
-    },
-    "tvg_name": {                     // Exclusion rules for tvg-name
-      "exact_match": [],
-      "contains": [],
-      "startswith": [],
-      "regex": []
-    },
-    "url_domain": {                   // Exclusion rules for URL domain (e.g., problematic hosts)
-      "contains": ["bad-domain.com"]
-    }
+    "group":    { "exact_match": [], "contains": [], "startswith": [], "regex": [] },
+    "channel":  { "exact_match": [], "contains": [], "startswith": [], "regex": [] },
+    "tvg_name": { "exact_match": [], "contains": [], "startswith": [], "regex": [] },
+    "url_domain": { "contains": ["arslan.vip", ".top"] }
   },
   "include": {
-    "group_prefix": ["NL", "TR"],     // Special AND logic: group must start with one of these prefixes
-    "group_content": ["MOVIES", "SERIES"], // AND logic: group must contain one of these keywords
-    "group": {                        // Inclusion rules for group-title (OR logic for individual rules, AND for overall fields if defined)
-      "exact_match": [],
-      "contains": ["Sports", "News"],
-      "startswith": [],
-      "regex": []
-    },
-    "channel": {                      // Inclusion rules for channel name
-      "exact_match": [],
-      "contains": [],
-      "startswith": [],
-      "regex": []
-    },
-    "tvg_name": {                     // Inclusion rules for tvg-name
-      "exact_match": [],
-      "contains": [],
-      "startswith": [],
-      "regex": []
-    }
+    "group_prefix": ["NL", "TR"],
+    "group_content": ["MOVIES", "SERIES"],
+    "group":    { "exact_match": [], "contains": [], "startswith": [], "regex": [] },
+    "channel":  { "exact_match": [], "contains": [], "startswith": [], "regex": [] },
+    "tvg_name": { "exact_match": [], "contains": [], "startswith": [], "regex": [] }
   }
 }
 ```
 
--   **`settings`**:
-    -   `top_fastest_count`: If greater than 0, `m3u_processor.py` will test the speed of all M3U URLs and only process the specified number of fastest ones.
-    -   `domain_error_threshold`: If greater than 0, `m3u_processor.py` will track errors per domain. If a domain accumulates this many errors, it will be temporarily skipped in future processing runs to avoid wasting time on unresponsive sources.
--   **`exclude`**: Defines rules to *remove* M3U entries. If an entry matches *any* exclusion rule, it will be removed.
--   **`include`**: Defines rules to *keep* M3U entries.
-    -   `group_prefix` and `group_content` work together with an **AND** logic. If both are specified, a group must match *both* a prefix and a content keyword to be considered.
-    -   Other `group`, `channel`, `tvg_name` `include` rules work with **OR** logic within their respective sections (e.g., `group` can contain "Sports" OR "News"). If any `include` fields are defined, an entry must match at least one `include` rule (after passing all `exclude` rules) to be kept. If no `include` rules are defined, all non-excluded entries are kept.
+Semantics:
+
+- **Excludes win first** — an entry matching *any* exclude rule is
+  rejected before includes are even considered.
+- **URL-domain exclusions** match on the parsed domain with endswith
+  semantics: `arslan.vip` matches `arslan.vip` and `cdn.arslan.vip`;
+  `.top` matches any host in the `.top` TLD.
+- **Includes**: if both `group_prefix` and `group_content` are set, a
+  group must satisfy both (AND). Otherwise, if any include rules are
+  defined, the entry must match at least one (OR across fields). With no
+  include rules, all non-excluded entries pass.
+
+## Usage
+
+### Web UI (recommended)
+
+```bash
+uv run python main.py
+# open http://localhost:8000
+```
+
+If the server is started with `IPTV_API_KEY` set, the UI will prompt for
+the key the first time you load a page; the key is kept in
+`sessionStorage` for the lifetime of the tab.
+
+### CLI
+
+Scrape M3U URLs from a configured page:
+
+```bash
+uv run python iptv_scraper.py --url "https://www.example.com/your-iptv-source"
+```
+
+Process the scraped URLs against the filter config:
+
+```bash
+uv run python m3u_processor.py --input iptv_m3u_urls.txt --config m3u_filter_config.json
+```
+
+## Development
+
+```bash
+uv sync                       # install runtime + dev dependencies
+uv run pytest                 # run the test suite (71 tests)
+```
+
+Add new modules? Drop them in the project root, mirror the import
+patterns in `db.py` / `filters.py` / `parser.py`, and add a test file
+under `tests/` with matching `test_<module>.py` name.
 
 ## Project Structure
 
 ```
 .
-├───main.py                 # FastAPI application and web server
-├───iptv_scraper.py         # Script to scrape M3U URLs from web sources
-├───m3u_processor.py        # Script to process, filter, and consolidate M3U files
-├───archive_playlist.py     # Utility for archiving master_iptv.m3u
-├───m3u_filter_config.json  # Configuration for M3U filtering rules
-├───domain_errors.db        # SQLite database for tracking domain errors
-├───master_iptv.m3u         # Generated master IPTV playlist
-├───urls.txt                # Example input for m3u_processor.py (list of M3U source URLs)
-├───static/                 # Frontend web assets (HTML, CSS, JS)
-│   ├───index.html
-│   ├───script.js
-│   └───style.css
-├───cache/                  # Directory for temporary downloaded M3U files
-└───archive/                # Directory for archived master_iptv.m3u files
+├── main.py                 # FastAPI application and web server
+├── iptv_scraper.py         # Script to scrape M3U URLs from web sources
+├── m3u_processor.py        # Orchestrates: download → filter → speed-test → write master
+├── archive_playlist.py     # Utility for archiving master_iptv.m3u
+├── netguard.py             # SSRF guard: is_public_http_url()
+├── downloader.py           # M3U fetcher with SSRF guard + latency probing
+├── filters.py              # M3UFilterConfig: include/exclude rule engine
+├── parser.py               # parse_m3u / create_master_m3u
+├── db.py                   # DomainErrorTracker (SQLite)
+├── remove_ip_urls.sh       # Strip raw-IP URLs from a file (project-scoped)
+├── m3u_filter_config.json  # Filtering rules
+├── domain_errors.db        # (gitignored) runtime error history
+├── master_iptv.m3u         # (gitignored) generated playlist
+├── urls.txt                # (gitignored) example input
+├── tests/                  # pytest suite
+│   ├── conftest.py
+│   ├── test_netguard.py
+│   ├── test_filters.py
+│   ├── test_parser.py
+│   ├── test_db.py
+│   └── test_imports.py
+├── static/                 # Web UI assets
+│   ├── index.html
+│   ├── script.js
+│   └── style.css
+├── cache/                  # (gitignored) temporary downloaded M3U files
+└── archive/                # (gitignored) archived master_iptv.m3u files
 ```
 
-## Contributing
+## Security notes
 
-Contributions are welcome! Please feel free to open issues or submit pull requests.
+- The server binds to `127.0.0.1` by default. It will refuse to bind to
+  a non-loopback address unless `IPTV_API_KEY` is set.
+- All `/api/*` endpoints and the WebSocket require the key when set.
+  The frontend stores the key in `sessionStorage` (per-tab) and sends it
+  as `X-API-Key` (or `?api_key=` for the WebSocket).
+- Server-side log broadcasts redact `user:pass@` URL credentials before
+  sending messages to clients.
+- Configuration writes use a temp file + `os.replace()` for atomicity.
+
+## TODO
+
+- Containerize (Docker).
 
 ## License
 
-This project is open-source and available under the MIT License.
+MIT — see [LICENSE](LICENSE).

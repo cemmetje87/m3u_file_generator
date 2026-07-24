@@ -10,7 +10,18 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-FILEPATH="$1"
+INPUT="$1"
+
+# Resolve to absolute path and verify it's within the project directory
+FILEPATH="$(realpath -m "$INPUT" 2>/dev/null || echo "$INPUT")"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+case "$FILEPATH" in
+    "$PROJECT_DIR"/*) ;;
+    *)
+        echo "Error: Path '$INPUT' resolves outside the project directory ('$PROJECT_DIR')"
+        exit 1
+        ;;
+esac
 
 # Check if file exists
 if [ ! -f "$FILEPATH" ]; then

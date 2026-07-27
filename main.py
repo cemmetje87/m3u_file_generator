@@ -168,6 +168,11 @@ async def get():
 @app.websocket("/ws/logs")
 async def websocket_endpoint(websocket: WebSocket):
     if API_KEY is not None and websocket.query_params.get("api_key") != API_KEY:
+        # Accept first: closing before the handshake completes makes the server
+        # reject it as HTTP 403, and the browser then reports close code 1006
+        # instead of 4401, so the client can't tell auth failures apart from
+        # ordinary network drops.
+        await websocket.accept()
         await websocket.close(code=4401)
         return
     await manager.connect(websocket)

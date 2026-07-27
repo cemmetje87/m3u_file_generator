@@ -40,12 +40,13 @@
                     <button id="btn-scrape" class="btn btn-primary">
                         <i class="fa-solid fa-search"></i> Find Links
                     </button>
-                    <button id="btn-process" class="btn btn-secondary">
+                    <button id="btn-process" class="btn btn-outline">
                         <i class="fa-solid fa-filter"></i> Process & Filter
                     </button>
-                    <button id="btn-edit-config" class="btn btn-secondary">
+                    <button id="btn-edit-config" class="btn btn-ghost">
                         <i class="fa-solid fa-edit"></i> Edit Filters
                     </button>
+                    <div class="action-separator"></div>
                     <button id="btn-download" class="btn btn-success" disabled>
                         <i class="fa-solid fa-download"></i> Download M3U
                     </button>
@@ -82,8 +83,30 @@
                 <textarea id="config-editor" spellcheck="false"></textarea>
             </div>
             <div class="modal-footer">
-                <button id="btn-cancel-config" class="btn btn-secondary">Cancel</button>
+                <div id="config-error" class="form-error" role="alert"></div>
+                <button id="btn-cancel-config" class="btn btn-ghost">Cancel</button>
                 <button id="btn-save-config" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Prompt Modal -->
+    <div id="apikey-modal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-key"></i> API Key Required</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-text">This server requires an API key. It is kept for this browser tab only.</p>
+                <div class="input-wrapper">
+                    <i class="fa-solid fa-key input-icon"></i>
+                    <input type="password" id="apikey-input" placeholder="Enter API key" autocomplete="off">
+                </div>
+                <div id="apikey-error" class="form-error" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-cancel-apikey" class="btn btn-ghost">Cancel</button>
+                <button id="btn-submit-apikey" class="btn btn-primary">Continue</button>
             </div>
         </div>
     </div>

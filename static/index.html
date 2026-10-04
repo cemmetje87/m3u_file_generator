@@ -3,117 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3U File Generator</title>
+    <title>M3U Engine</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="app-container">
-        <header class="app-header">
-            <div class="logo">
-                <i class="fa-solid fa-tv"></i>
-                <span>M3U File Generator</span>
+<!-- Icon sprite: a handful of glyphs, inlined so the panel owns its own artwork. -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></symbol>
+    <symbol id="i-sieve" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.4"/><circle cx="16" cy="17" r="2.4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5"/><path d="M4 19h16"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4"/><path d="M12 12h9m-3 0v4m-3-4v3"/></symbol>
+</svg>
+
+<div class="rack">
+
+    <header class="rack-head">
+        <div class="mark">
+            <span class="mark-glyph" aria-hidden="true">
+                <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+            </span>
+            <span class="mark-text">
+                <span class="mark-name">M3U Engine</span>
+                <span class="mark-sub">Playlist acquisition &amp; filtering</span>
+            </span>
+        </div>
+        <div class="lamps">
+            <span class="lamp-set">
+                <span class="lamp" id="link-lamp" data-state="down"></span>
+                <span class="lamp-label" id="link-label">Link down</span>
+            </span>
+        </div>
+    </header>
+
+    <main class="rack-main">
+
+        <section class="chain" aria-label="Signal chain">
+
+            <article class="module" id="mod-acquire" data-state="standby">
+                <div class="mod-head">
+                    <span class="tally" aria-hidden="true"></span>
+                    <h2 class="mod-name">Acquire</h2>
+                    <span class="mod-state" id="state-acquire">Standby</span>
+                </div>
+                <div class="mod-body">
+                    <p class="mod-note">Scan a source page for playlist links, then keep the ones that answer.</p>
+                    <div class="field">
+                        <label class="field-label" for="source-url">Source page</label>
+                        <input type="text" id="source-url" spellcheck="false"
+                               placeholder="https://example.com/m3u"
+                               value="https://www.iptvregion.eu.org/search/label/M3U">
+                    </div>
+                    <div class="readout">
+                        <span class="readout-value" id="ro-feeds">&ndash;&ndash;</span>
+                        <span class="readout-unit">live feeds</span>
+                    </div>
+                </div>
+                <div class="mod-foot">
+                    <button id="btn-scrape" class="btn btn-signal">
+                        <svg class="ico"><use href="#i-search"/></svg><span class="btn-label">Find feeds</span>
+                    </button>
+                </div>
+            </article>
+
+            <div class="patch" data-flow="off" aria-hidden="true"><span class="patch-pulse"></span></div>
+
+            <article class="module" id="mod-filter" data-state="standby">
+                <div class="mod-head">
+                    <span class="tally" aria-hidden="true"></span>
+                    <h2 class="mod-name">Filter</h2>
+                    <span class="mod-state" id="state-filter">Standby</span>
+                </div>
+                <div class="mod-body">
+                    <p class="mod-note">Download each feed and drop every channel your rules reject.</p>
+                    <div class="readout">
+                        <span class="readout-value" id="ro-rules">&ndash;&ndash;</span>
+                        <span class="readout-unit">active rules</span>
+                    </div>
+                </div>
+                <div class="mod-foot">
+                    <button id="btn-process" class="btn btn-signal">
+                        <svg class="ico"><use href="#i-sieve"/></svg><span class="btn-label">Run filter</span>
+                    </button>
+                    <button id="btn-edit-config" class="btn btn-quiet">
+                        <svg class="ico"><use href="#i-sliders"/></svg><span class="btn-label">Edit rules</span>
+                    </button>
+                </div>
+            </article>
+
+            <div class="patch" data-flow="off" aria-hidden="true"><span class="patch-pulse"></span></div>
+
+            <article class="module" id="mod-master" data-state="empty">
+                <div class="mod-head">
+                    <span class="tally" aria-hidden="true"></span>
+                    <h2 class="mod-name">Master</h2>
+                    <span class="mod-state" id="state-master">Empty</span>
+                </div>
+                <div class="mod-body">
+                    <p class="mod-note">One playlist, de-duplicated, ready for your player.</p>
+                    <div class="readout readout-pair">
+                        <span>
+                            <span class="readout-value" id="ro-channels">&ndash;&ndash;</span>
+                            <span class="readout-unit">channels</span>
+                        </span>
+                        <span>
+                            <span class="readout-value" id="ro-size">&ndash;&ndash;</span>
+                            <span class="readout-unit">on disk</span>
+                        </span>
+                    </div>
+                    <p class="readout-stamp" id="ro-stamp"></p>
+                </div>
+                <div class="mod-foot">
+                    <button id="btn-download" class="btn btn-live" disabled>
+                        <svg class="ico"><use href="#i-download"/></svg><span class="btn-label">Download .m3u</span>
+                    </button>
+                </div>
+            </article>
+
+        </section>
+
+        <section class="console" aria-label="Output">
+            <div class="console-head">
+                <h2 class="console-title">Console</h2>
+                <span class="console-meta" id="console-count"></span>
+                <button id="btn-clear-logs" class="icon-btn" title="Clear console">
+                    <svg class="ico"><use href="#i-trash"/></svg>
+                </button>
             </div>
-            <div class="status-indicator">
-                <span class="status-dot" id="connection-status"></span>
-                <span id="status-text">Disconnected</span>
+            <div class="console-body" id="logs" role="log" aria-live="polite">
+                <p class="console-empty" id="console-empty">No output yet. Start a stage and it streams here.</p>
             </div>
+        </section>
+
+    </main>
+
+    <footer class="rack-foot">
+        <span>M3U Engine v1.0</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>cemmetje87</span>
+        <span class="dot" aria-hidden="true"></span>
+        <span>MIT</span>
+    </footer>
+
+</div>
+
+<!-- Filter rules -->
+<div id="config-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+    <div class="sheet">
+        <header class="sheet-head">
+            <h3 class="sheet-title" id="rules-title">Filter rules</h3>
+            <div class="tabs" role="tablist">
+                <button class="tab is-on" data-pane="build" role="tab" aria-selected="true">Builder</button>
+                <button class="tab" data-pane="json" role="tab" aria-selected="false">JSON</button>
+            </div>
+            <button class="icon-btn close-modal" title="Close">
+                <svg class="ico"><use href="#i-x"/></svg>
+            </button>
         </header>
 
-        <main class="main-content">
-            <div class="card control-card">
-                <h2><i class="fa-solid fa-sliders"></i> Configuration</h2>
-                
-                <div class="input-group">
-                    <label for="search-url">Source URL</label>
-                    <div class="input-wrapper">
-                        <i class="fa-solid fa-globe input-icon"></i>
-                        <input type="text" id="search-url" placeholder="https://example.com/iptv" value="https://www.iptvregion.eu.org/search/label/M3U">
-                    </div>
-                    <small class="hint">Target website to scrape M3U links from.</small>
-                </div>
+        <div class="sheet-bar" id="config-file-bar">
+            <label class="field-label" for="config-file-select">File</label>
+            <select id="config-file-select"></select>
+        </div>
 
-                <div class="action-buttons">
-                    <button id="btn-scrape" class="btn btn-primary">
-                        <i class="fa-solid fa-search"></i> Find Links
-                    </button>
-                    <button id="btn-process" class="btn btn-outline">
-                        <i class="fa-solid fa-filter"></i> Process & Filter
-                    </button>
-                    <button id="btn-edit-config" class="btn btn-ghost">
-                        <i class="fa-solid fa-edit"></i> Edit Filters
-                    </button>
-                    <div class="action-separator"></div>
-                    <button id="btn-download" class="btn btn-success" disabled>
-                        <i class="fa-solid fa-download"></i> Download M3U
-                    </button>
-                </div>
-            </div>
+        <div class="sheet-body">
 
-            <div class="card terminal-card">
-                <div class="terminal-header">
-                    <div class="terminal-title">
-                        <i class="fa-solid fa-terminal"></i> Live Logs
+            <div class="pane" id="pane-build">
+
+                <section class="block">
+                    <h4 class="block-title">Run settings</h4>
+                    <div class="setting-grid">
+                        <div class="field">
+                            <label class="field-label" for="set-top-fastest">Fastest feeds to use</label>
+                            <input type="number" id="set-top-fastest" min="0" step="1">
+                            <p class="field-hint">0 uses every feed.</p>
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="set-error-threshold">Skip domain after errors</label>
+                            <input type="number" id="set-error-threshold" min="0" step="1">
+                            <p class="field-hint">0 never skips.</p>
+                        </div>
                     </div>
-                    <div class="terminal-actions">
-                        <button id="btn-clear-logs" class="btn-icon" title="Clear Logs">
-                            <i class="fa-solid fa-trash-can"></i>
+                </section>
+
+                <section class="block">
+                    <h4 class="block-title">Rules</h4>
+                    <p class="block-note">Excludes run first &mdash; anything they match is dropped before includes are considered. With no include rules, everything that survives the excludes is kept.</p>
+                    <div class="rule-head" aria-hidden="true">
+                        <span>Action</span><span>Field</span><span>Test</span><span>Value</span><span></span>
+                    </div>
+                    <div id="rule-list"></div>
+                    <p class="rule-empty" id="rule-empty">No rules yet. Every channel will be kept.</p>
+                    <button id="btn-add-rule" class="btn btn-quiet btn-inline">
+                        <svg class="ico"><use href="#i-plus"/></svg><span class="btn-label">Add rule</span>
+                    </button>
+                    <div class="vocab-bar">
+                        <p class="vocab-note" id="vocab-note">Checking the value lookup&hellip;</p>
+                        <button id="btn-scan-vocab" class="btn btn-quiet btn-inline" hidden>
+                            <svg class="ico"><use href="#i-search"/></svg><span class="btn-label">Scan playlist</span>
                         </button>
                     </div>
-                </div>
-                <div class="terminal-body" id="logs">
-                    <div class="log-line log-system">Initializing system... Ready.</div>
-                </div>
-            </div>
-        </main>
-    </div>
+                </section>
 
-    <!-- Config Editor Modal -->
-    <div id="config-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Edit Configuration</h3>
-                <button class="close-modal">&times;</button>
+                <section class="block">
+                    <h4 class="block-title">Paired group match</h4>
+                    <p class="block-note">Keep a group only when its name <em>starts with</em> one of the first list <em>and contains</em> one of the second. Fill both lists and this replaces the include rules above.</p>
+                    <div class="setting-grid">
+                        <div class="field">
+                            <label class="field-label" for="chip-prefix-input">Starts with</label>
+                            <div class="chips" id="chips-prefix">
+                                <input type="text" id="chip-prefix-input" class="chip-input" placeholder="NL" spellcheck="false">
+                            </div>
+                            <p class="field-hint">Type to look up a group; press Enter to add.</p>
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="chip-content-input">And contains</label>
+                            <div class="chips" id="chips-content">
+                                <input type="text" id="chip-content-input" class="chip-input" placeholder="MOVIES" spellcheck="false">
+                            </div>
+                            <p class="field-hint">Type to look up a group; press Enter to add.</p>
+                        </div>
+                    </div>
+                    <p class="pair-warning" id="pair-warning" hidden>Only one list is filled, so this pair is ignored. Fill both, or clear both.</p>
+                </section>
+
             </div>
-            <div class="modal-body">
-                <select id="config-file-select" class="config-select"></select>
+
+            <div class="pane" id="pane-json" hidden>
+                <p class="block-note">Edits here and in the builder are the same document &mdash; switching tabs carries your changes across.</p>
                 <textarea id="config-editor" spellcheck="false"></textarea>
             </div>
-            <div class="modal-footer">
-                <div id="config-error" class="form-error" role="alert"></div>
-                <button id="btn-cancel-config" class="btn btn-ghost">Cancel</button>
-                <button id="btn-save-config" class="btn btn-primary">Save Changes</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- API Key Prompt Modal -->
-    <div id="apikey-modal" class="modal">
-        <div class="modal-content modal-sm">
-            <div class="modal-header">
-                <h3><i class="fa-solid fa-key"></i> API Key Required</h3>
-            </div>
-            <div class="modal-body">
-                <p class="modal-text">This server requires an API key. It is kept for this browser tab only.</p>
-                <div class="input-wrapper">
-                    <i class="fa-solid fa-key input-icon"></i>
-                    <input type="password" id="apikey-input" placeholder="Enter API key" autocomplete="off">
-                </div>
-                <div id="apikey-error" class="form-error" role="alert"></div>
-            </div>
-            <div class="modal-footer">
-                <button id="btn-cancel-apikey" class="btn btn-ghost">Cancel</button>
-                <button id="btn-submit-apikey" class="btn btn-primary">Continue</button>
-            </div>
         </div>
-    </div>
 
-    <script src="/static/script.js"></script>
-    <footer>
-        cemmetje87 - M3U File Generator v1.0 - MIT License
-    </footer>
+        <footer class="sheet-foot">
+            <div id="config-error" class="form-error" role="alert"></div>
+            <button id="btn-cancel-config" class="btn btn-quiet">Cancel</button>
+            <button id="btn-save-config" class="btn btn-signal">Save rules</button>
+        </footer>
+    </div>
+</div>
+
+<!-- API key -->
+<div id="apikey-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="apikey-title">
+    <div class="sheet sheet-sm">
+        <header class="sheet-head">
+            <h3 class="sheet-title" id="apikey-title">API key</h3>
+        </header>
+        <div class="sheet-body">
+            <p class="block-note">This server checks a key on every request. It is held for this browser tab only.</p>
+            <div class="field">
+                <label class="field-label" for="apikey-input">Key</label>
+                <input type="password" id="apikey-input" placeholder="Paste the key" autocomplete="off">
+            </div>
+            <div id="apikey-error" class="form-error" role="alert"></div>
+        </div>
+        <footer class="sheet-foot">
+            <button id="btn-cancel-apikey" class="btn btn-quiet">Cancel</button>
+            <button id="btn-submit-apikey" class="btn btn-signal">Continue</button>
+        </footer>
+    </div>
+</div>
+
+<script src="/static/script.js"></script>
 </body>
 </html>

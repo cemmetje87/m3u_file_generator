@@ -9,8 +9,16 @@ FastAPI web UI lets you trigger jobs and watch logs in real time.
 
 ## Features
 
-- **Web interface** (`static/index.html`) for triggering jobs and watching
-  WebSocket-pushed logs.
+- **Web interface** (`static/index.html`) laid out as a three-stage signal
+  chain — acquire, filter, master — with live stage lamps, on-panel
+  readouts (feeds found, active rules, channel count, output size) and a
+  WebSocket-pushed log console.
+- **Filter rule builder** in the web UI: add and remove rules from
+  dropdowns instead of hand-editing JSON. A JSON tab is still there for
+  bulk edits, and the two views stay in sync.
+- **Value lookup** while you type a rule: group titles, channel names and
+  tvg-names seen in the sources are captured during a build and offered as
+  suggestions, ranked by how many channels carry them.
 - **M3U URL scraping** discovers and extracts M3U playlist URLs from
   configured pages.
 - **URL validation & latency testing** uses a `ThreadPoolExecutor` to probe
@@ -111,6 +119,34 @@ If the server is started with `IPTV_API_KEY` set, the UI will prompt for
 the key the first time you load a page; the key is kept in
 `sessionStorage` for the lifetime of the tab.
 
+**Editing filters.** *Edit rules* on the Filter stage opens the rule
+builder. Each row reads as one sentence — exclude / include, which field,
+which test, and the value — and maps to exactly one entry in
+`m3u_filter_config.json`. URL-domain rules are exclude-only and match on
+host-or-subdomain, so the builder fixes those two columns for you. The
+paired group match (`group_prefix` + `group_content`) has its own block,
+and warns when only one of the two lists is filled, since a half-filled
+pair is ignored by the filter engine. The JSON tab edits the same
+document; switching tabs carries changes across.
+
+**Value lookup.** Typing in a rule's value box (or in either paired-group
+list) suggests values that actually occur in the sources, with the number
+of channels carrying each one. Matching ignores case and accents, so
+`series` finds `SÉRIES | Drama`, and values starting with what you typed
+rank above values that merely contain it. Regex rules get no suggestions,
+since a literal group name like `SÉRIES | Drama` is not the pattern that
+matches it.
+
+The vocabulary is written to `vocabulary/` (gitignored) at the end of a
+processing run, collected *before* filtering — you cannot write a rule
+against a group you cannot see, so excluded values stay discoverable. If
+no run has happened yet, *Scan playlist* builds the same index from an
+existing `master_iptv.m3u` in a few seconds; that index is post-filter, so
+it only offers values your current rules already keep, and the builder
+says so. Group titles are indexed in full; channel names and tvg-names run
+to a million distinct values on a large corpus, so the 200,000 most common
+of each are kept and the builder reports the cap.
+
 ### CLI
 
 Scrape M3U URLs from a configured page:
@@ -148,6 +184,7 @@ under `tests/` with matching `test_<module>.py` name.
 ├── downloader.py           # M3U fetcher with SSRF guard + latency probing
 ├── filters.py              # M3UFilterConfig: include/exclude rule engine
 ├── parser.py               # parse_m3u / create_master_m3u
+├── vocabulary.py           # Captures + searches the values the rule builder suggests
 ├── db.py                   # DomainErrorTracker (SQLite)
 ├── remove_ip_urls.sh       # Strip raw-IP URLs from a file (project-scoped)
 ├── m3u_filter_config.json  # Filtering rules
@@ -159,12 +196,14 @@ under `tests/` with matching `test_<module>.py` name.
 │   ├── test_netguard.py
 │   ├── test_filters.py
 │   ├── test_parser.py
+│   ├── test_vocabulary.py
 │   ├── test_db.py
 │   └── test_imports.py
 ├── static/                 # Web UI assets
 │   ├── index.html
 │   ├── script.js
 │   └── style.css
+├── vocabulary/             # (gitignored) value index for the rule builder's lookups
 ├── cache/                  # (gitignored) temporary downloaded M3U files
 └── archive/                # (gitignored) archived master_iptv.m3u files
 ```

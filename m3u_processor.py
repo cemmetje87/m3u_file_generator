@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import archive_playlist
+import vocabulary
 from db import DomainErrorTracker
 from downloader import download_m3u, test_url_speed
 from filters import M3UFilterConfig
@@ -146,6 +147,9 @@ def main():
         print(f"Using all {len(urls)} URLs\n")
 
     all_entries = []
+    # Collected before filtering: the UI offers these as lookup values when
+    # you write a rule, and you cannot write a rule for a group you can't see.
+    vocab = vocabulary.VocabularyCollector()
 
     # Download and process each M3U
     for i, url in enumerate(urls, 1):
@@ -165,6 +169,8 @@ def main():
         excluded_count = 0
 
         for entry in entries:
+            vocab.add_entry(entry)
+
             # Apply filter configuration
             is_allowed, reason = filter_config.is_entry_allowed(entry)
 
@@ -188,6 +194,21 @@ def main():
 
     print(f"\nMaster M3U created with:")
     print(f"  - Total unique entries: {total_entries}")
+
+    # Save the value vocabulary for the filter builder's lookups. A run where
+    # every download failed has nothing to say, and saving it would wipe a
+    # good index from an earlier run.
+    if vocab.entries_seen == 0:
+        print("\nNo entries parsed - keeping the existing filter vocabulary.")
+    else:
+        try:
+            vocab_meta = vocab.save()
+            print(f"\nFilter vocabulary captured from {vocab_meta['entries_seen']} entries:")
+            for field, info in vocab_meta["fields"].items():
+                note = f" (kept top {info['kept']})" if info["truncated"] else ""
+                print(f"  - {field}: {info['total']} distinct values{note}")
+        except OSError as e:
+            print(f"  Warning: could not save filter vocabulary: {e}")
 
     print("\nFiles created:")
     print("  - master_iptv.m3u (filtered M3U file)")

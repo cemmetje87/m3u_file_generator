@@ -25,6 +25,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import vocabulary
 from netguard import is_public_http_url
 
 API_KEY = os.environ.get("IPTV_API_KEY")
@@ -224,6 +225,163 @@ async def download_file(http_request: Request):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="master_iptv.m3u not found")
     return FileResponse(file_path, filename="master_iptv.m3u", media_type='audio/x-mpegurl')
+
+
+def _file_stat(path: Path) -> Dict[str, Any]:
+    """Existence, size and mtime for an artefact the UI reports on."""
+    if not path.exists():
+        return {"exists": False}
+    stat = path.stat()
+    return {"exists": True, "size": stat.st_size, "mtime": stat.st_mtime}
+
+
+# Counting channels means reading the whole master playlist, which is hundreds
+# of megabytes. Cache on (size, mtime) so we pay that once per build rather
+# than once per status poll.
+_channel_count_cache: Dict[Any, int] = {}
+
+
+def _count_channels(path: Path, key: Any) -> int:
+    if key in _channel_count_cache:
+        return _channel_count_cache[key]
+    count = 0
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if line.startswith("#EXTINF"):
+                count += 1
+    # One entry is enough: the cache only ever tracks the current build.
+    _channel_count_cache.clear()
+    _channel_count_cache[key] = count
+    return count
+
+
+@app.get("/api/status")
+async def get_status(http_request: Request):
+    """Artefact state on disk, so the UI can show real readouts on load.
+
+    Without this the download control could only be enabled by watching a
+    process run in the current tab, even when a master playlist already
+    exists from an earlier session.
+    """
+    verify_api_key(http_request.headers.get("X-API-Key"))
+
+    sources_path = Path("iptv_m3u_urls.txt")
+    sources = _file_stat(sources_path)
+    if sources["exists"]:
+        try:
+            with open(sources_path, "r", encoding="utf-8") as f:
+                sources["count"] = sum(1 for line in f if line.strip())
+        except OSError:
+            sources["count"] = None
+
+    output_path = Path("master_iptv.m3u")
+    output = _file_stat(output_path)
+    if output["exists"]:
+        try:
+            output["channels"] = await asyncio.to_thread(
+                _count_channels, output_path, (output["size"], output["mtime"])
+            )
+        except OSError:
+            output["channels"] = None
+
+    return {
+        "sources": sources,
+        "output": output,
+        "busy": job_lock.locked(),
+    }
+
+
+# --- Filter value lookups -------------------------------------------------
+# The rule builder offers real group / channel / tvg-name values as you type.
+# Indexes are loaded per field on first use and re-read when the vocabulary
+# is rebuilt, so a session that only ever touches "group" never pays to load
+# the million-value tvg-name field.
+_vocab_indexes: Dict[str, Any] = {}
+vocab_lock = asyncio.Lock()
+
+
+def _load_field_index(field: str):
+    path = vocabulary.DEFAULT_DIR / f"{field}.tsv"
+    if not path.is_file():
+        return None
+    stat = path.stat()
+    key = (stat.st_size, stat.st_mtime)
+    cached = _vocab_indexes.get(field)
+    if cached and cached[0] == key:
+        return cached[1]
+    index = vocabulary.FieldIndex.load(path)
+    _vocab_indexes[field] = (key, index)
+    return index
+
+
+@app.get("/api/vocabulary")
+async def get_vocabulary(http_request: Request):
+    """What the lookup index knows, so the builder can explain itself."""
+    verify_api_key(http_request.headers.get("X-API-Key"))
+    meta = vocabulary.load_meta()
+    return {
+        "available": meta is not None,
+        "meta": meta,
+        # Without a build to learn from, the finished playlist is the only
+        # other place these values exist.
+        "can_derive": Path("master_iptv.m3u").exists(),
+        "building": vocab_lock.locked(),
+    }
+
+
+@app.get("/api/vocabulary/{field}")
+async def search_vocabulary(field: str, http_request: Request, q: str = "", limit: int = 25):
+    verify_api_key(http_request.headers.get("X-API-Key"))
+    if field not in vocabulary.FIELDS:
+        raise HTTPException(status_code=404, detail="Unknown vocabulary field")
+
+    limit = max(1, min(limit, 100))
+    index = await asyncio.to_thread(_load_field_index, field)
+    if index is None:
+        return {"field": field, "available": False, "matches": []}
+
+    matches = await asyncio.to_thread(index.search, q, limit)
+    return {
+        "field": field,
+        "available": True,
+        "total": len(index),
+        "matches": [{"value": value, "count": count} for value, count in matches],
+    }
+
+
+@app.post("/api/vocabulary/derive")
+async def derive_vocabulary(http_request: Request):
+    """Build the lookup index from the existing master playlist.
+
+    A full run captures values before filtering; this fallback can only see
+    what the current rules already let through, but it makes the lookups
+    usable without waiting for a rebuild.
+    """
+    verify_api_key(http_request.headers.get("X-API-Key"))
+
+    playlist = Path("master_iptv.m3u")
+    if not playlist.exists():
+        raise HTTPException(status_code=404, detail="master_iptv.m3u not found")
+    if vocab_lock.locked():
+        raise HTTPException(status_code=409, detail="Vocabulary is already being built")
+
+    async with vocab_lock:
+        await manager.broadcast(f"Indexing filter values from {playlist}...")
+
+        def build():
+            return vocabulary.collect_from_playlist(playlist).save(source="playlist")
+
+        try:
+            meta = await asyncio.to_thread(build)
+        except OSError as e:
+            print(f"Error deriving vocabulary: {e}")
+            raise HTTPException(status_code=500, detail="Failed to index filter values")
+
+        _vocab_indexes.clear()
+        for name, info in meta["fields"].items():
+            await manager.broadcast(f"  - {name}: {info['total']} distinct values")
+        await manager.broadcast("Filter value index ready.")
+        return {"status": "ok", "meta": meta}
 
 
 @app.get("/api/configs")
